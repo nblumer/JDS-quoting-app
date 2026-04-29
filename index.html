@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JD's Quoting App</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --navy: #1A344D; --navy-mid: #2a4f6e; --tan: #C19C82;
+    --tan-light: #f0e6dc; --tan-dark: #9a7a62; --cream: #faf8f5;
+    --white: #ffffff; --text: #1e1e1c; --muted: #6b6b68;
+    --border: #dedad4; --border-strong: #c4c0b8;
+    --green: #1e6b42; --green-bg: #e8f5ee;
+    --amber: #7a4e0a; --amber-bg: #fdf3e3;
+    --red: #8b1f1f; --red-bg: #fdecea; --surface: #f5f3ef;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--cream); color: var(--text); min-height: 100vh; }
+
+  .app-header { background: var(--navy); padding: 18px 28px; display: flex; align-items: center; justify-content: space-between; }
+  .app-header .brand { color: var(--tan); font-size: 11px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; }
+  .app-header h1 { color: white; font-size: 1.1rem; font-weight: 700; margin-top: 2px; }
+  .app-header .tagline { color: rgba(255,255,255,0.45); font-size: 11px; }
+
+  .app-body { display: grid; grid-template-columns: 1fr 400px; gap: 0; min-height: calc(100vh - 72px); }
+  .left-panel { padding: 24px 28px; border-right: 1px solid var(--border); overflow-y: auto; }
+  .right-panel { padding: 24px 24px; background: var(--white); overflow-y: auto; }
+
+  .section-label { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--tan-dark); margin: 0 0 10px; }
+  .section-divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 5px; }
+  .field input, .field select { width: 100%; font-size: 13px; color: var(--text); background: var(--white); border: 1px solid var(--border); border-radius: 8px; padding: 8px 11px; font-family: inherit; transition: border-color 0.15s; }
+  .field input:focus, .field select:focus { outline: none; border-color: var(--navy); }
+  .field .hint { font-size: 11px; color: var(--tan-dark); font-weight: 600; margin-top: 4px; min-height: 16px; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+
+  .line-items { margin-bottom: 0; }
+  .line-item { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; }
+  .line-item .li-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .line-item .li-num { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--tan-dark); }
+  .li-remove { font-size: 11px; color: var(--muted); background: none; border: none; cursor: pointer; padding: 2px 6px; border-radius: 4px; font-family: inherit; }
+  .li-remove:hover { color: var(--red); background: var(--red-bg); }
+
+  .type-row { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 16px; }
+  .type-chip { font-size: 12px; font-weight: 600; padding: 6px 13px; border-radius: 20px; border: 1px solid var(--border); background: var(--white); color: var(--muted); cursor: pointer; transition: all 0.12s; }
+  .type-chip:hover { border-color: var(--navy); color: var(--navy); }
+
+  .notes-field textarea { width: 100%; font-size: 13px; color: var(--text); background: var(--white); border: 1px solid var(--border); border-radius: 8px; padding: 8px 11px; font-family: inherit; resize: vertical; min-height: 56px; transition: border-color 0.15s; }
+  .notes-field textarea:focus { outline: none; border-color: var(--navy); }
+
+  .calc-btn { width: 100%; padding: 12px; background: var(--navy); color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; transition: background 0.15s; margin-top: 18px; }
+  .calc-btn:hover { background: var(--navy-mid); }
+
+  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; color: var(--muted); padding: 40px 20px; }
+  .empty-state .es-icon { font-size: 2.5rem; margin-bottom: 12px; opacity: 0.4; }
+  .empty-state p { font-size: 13px; line-height: 1.6; }
+
+  .result-customer { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--tan-dark); margin-bottom: 4px; }
+  .result-title { font-size: 1.25rem; font-weight: 700; color: var(--navy); margin-bottom: 18px; }
+
+  .price-cards { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 18px; }
+  .price-card { border-radius: 10px; padding: 12px 12px 10px; border: 1px solid var(--border); text-align: center; cursor: pointer; transition: all 0.15s; }
+  .price-card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+  .price-card.recommended { border: 2px solid var(--navy); background: #edf2f7; }
+  .price-card.active-scenario { border: 2px solid var(--tan-dark) !important; background: var(--tan-light) !important; }
+  .price-card.recommended.active-scenario { border-color: var(--navy) !important; background: #dce8f0 !important; }
+  .price-card .pc-label { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .price-card.recommended .pc-label { color: var(--navy); }
+  .price-card .pc-price { font-size: 1.4rem; font-weight: 800; color: var(--navy); line-height: 1; }
+  .price-card .pc-margin { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .price-card.recommended .pc-margin { color: var(--navy-mid); font-weight: 600; }
+  .rec-badge { display: inline-block; font-size: 10px; font-weight: 700; background: var(--navy); color: white; padding: 2px 8px; border-radius: 20px; margin-bottom: 6px; }
+  .scenario-label { font-size: 11px; color: var(--tan-dark); font-weight: 700; text-align: center; margin: -8px 0 10px; }
+
+  .breakdown-title { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; margin-top: 4px; }
+  .breakdown-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 16px; }
+  .breakdown-table th { text-align: left; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 0 6px 7px; border-bottom: 1px solid var(--border); }
+  .breakdown-table th:last-child { text-align: right; }
+  .breakdown-table td { padding: 8px 6px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: middle; line-height: 1.4; }
+  .breakdown-table td:last-child { text-align: right; font-weight: 600; }
+  .breakdown-table .surcharge-row td { color: var(--amber); }
+  .breakdown-table .surcharge-row td:first-child { font-style: italic; }
+  .breakdown-table .total-row td { font-weight: 700; color: var(--navy); font-size: 13px; border-top: 2px solid var(--border-strong); border-bottom: none; padding-top: 10px; }
+
+  .reasoning-block { background: var(--surface); border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; border-left: 3px solid var(--tan); }
+  .reasoning-block .rb-title { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--tan-dark); margin-bottom: 7px; }
+  .reasoning-block .rb-item { font-size: 12px; color: var(--text); line-height: 1.6; margin-bottom: 3px; display: flex; gap: 6px; }
+  .reasoning-block .rb-item::before { content: '·'; color: var(--tan); flex-shrink: 0; font-weight: 700; }
+  .reasoning-block .rb-scenario { font-size: 11px; font-weight: 700; color: var(--navy); margin-bottom: 7px; padding: 3px 8px; background: rgba(26,52,77,0.07); border-radius: 4px; display: inline-block; }
+
+  .flag { border-radius: 8px; padding: 9px 12px; margin-bottom: 7px; font-size: 12px; line-height: 1.5; display: flex; gap: 8px; align-items: flex-start; }
+  .flag-icon { flex-shrink: 0; }
+  .flag.flag-warn { background: var(--amber-bg); color: var(--amber); border: 1px solid #f0d090; }
+  .flag.flag-ok   { background: var(--green-bg); color: var(--green); border: 1px solid #a8d8bc; }
+  .flag.flag-info { background: #edf2f7; color: var(--navy); border: 1px solid #b8cfe0; }
+
+  .copy-quote-btn { width: 100%; padding: 10px; background: none; border: 1px solid var(--border-strong); border-radius: 8px; font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer; font-family: inherit; margin-top: 8px; transition: all 0.12s; }
+  .copy-quote-btn:hover { border-color: var(--navy); color: var(--navy); }
+  .copy-quote-btn.copied { color: var(--green); border-color: var(--green); }
+  .plaque-hint { font-size: 12px; color: var(--tan-dark); font-weight: 600; margin-bottom: 10px; }
+  .li-plaque-fields { background: rgba(193,156,130,0.08); border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; border-left: 3px solid var(--tan); }
+
+  @media (max-width: 860px) { .app-body { grid-template-columns: 1fr; } .left-panel { border-right: none; border-bottom: 1px solid var(--border); } }
+  @media (max-width: 540px) { .left-panel, .right-panel { padding: 16px; } .grid-2, .grid-3 { grid-template-columns: 1fr; } .price-cards { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <div>
+    <div class="brand">JD's House of Trophies</div>
+    <h1>Quoting App</h1>
+  </div>
+  <button onclick="promptForApiKey()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);color:rgba(255,255,255,0.7);border-radius:6px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;letter-spacing:0.03em" title="Set your Anthropic API key for market price search">⚙ API Key</button>
+</div>
+
+<div class="app-body">
+<div class="left-panel">
+
+  <div class="section-label">Order details</div>
+  <div class="field" style="max-width:320px">
+    <label>Customer name</label>
+    <input type="text" id="cust-name" placeholder="e.g. Augustana University">
+  </div>
+
+  <hr class="section-divider">
+  <div class="section-label">Line items</div>
+  <div id="line-items-container"></div>
+
+  <div class="type-row">
+    <span style="font-size:12px;color:var(--muted);align-self:center;margin-right:2px;">Add item:</span>
+    <div class="type-chip" onclick="addLine('trophy')">🏆 Trophy / Medal</div>
+    <div class="type-chip" onclick="addLine('award')">🔷 Award</div>
+    <div class="type-chip" onclick="addLine('plaque')">📋 Plaque</div>
+    <div class="type-chip" onclick="addLine('engraving')">✏️ Engraving</div>
+  </div>
+
+  <button class="calc-btn" onclick="calculateQuote()">Calculate quote</button>
+</div>
+
+<div class="right-panel">
+  <div class="empty-state" id="empty-state">
+    <div class="es-icon">🧮</div>
+    <p>Add at least one line item, fill in COGS and/or last year's price and retail, then hit <strong>Calculate quote</strong>.</p>
+  </div>
+  <div id="results-panel"></div>
+</div>
+</div>
+
+<script>
+  let lineCount = 0;
+  const typeLabels = { trophy: 'Trophy / Medal', award: 'Award (Glass / Crystal / Acrylic)', plaque: 'Plaque', engraving: 'Engraving only' };
+
+  function fmt(n) { return '$' + Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  function fmtPct(n) { return Math.round(n * 100) + '%'; }
+  function fmtPctExact(n) { return (n * 100).toFixed(1).replace(/\.0$/, '') + '%'; }
+  function calcMargin(price, cogs) { if (!price || !cogs || price <= 0) return 0; return (price - cogs) / price; }
+  function roundToQuarter(n) { return Math.ceil(n * 4) / 4; }
+
+  // ── Plaque pricing table (retail prices from 2025-2026 price sheet) ──
+  const PLAQUE_PRICES = {
+    '4.5" x 6"':   { 'Finish / Double Plate': 19.90, 'Finish / Sublimated': 13.60, 'Genuine Walnut / Double Plate': 24.10, 'Genuine Walnut / Sub': 20.50, 'Red Alder & Walnut': null, 'Piano (Premium)': null },
+    '5" x 7"':     { 'Finish / Double Plate': 25.15, 'Finish / Sublimated': 16.80, 'Genuine Walnut / Double Plate': 32.45, 'Genuine Walnut / Sub': 27.60, 'Red Alder & Walnut': null, 'Piano (Premium)': null },
+    '6" x 8"':     { 'Finish / Double Plate': 32.45, 'Finish / Sublimated': 24.65, 'Genuine Walnut / Double Plate': 41.95, 'Genuine Walnut / Sub': 35.65, 'Red Alder & Walnut': null, 'Piano (Premium)': 49.95 },
+    '7" x 9"':     { 'Finish / Double Plate': 37.90, 'Finish / Sublimated': 33.15, 'Genuine Walnut / Double Plate': 48.30, 'Genuine Walnut / Sub': 39.75, 'Red Alder & Walnut': 48.30, 'Piano (Premium)': 54.95 },
+    '8" x 10"':    { 'Finish / Double Plate': 49.25, 'Finish / Sublimated': 40.80, 'Genuine Walnut / Double Plate': 54.55, 'Genuine Walnut / Sub': 51.45, 'Red Alder & Walnut': 54.55, 'Piano (Premium)': 62.95 },
+    '9" x 12"':    { 'Finish / Double Plate': 50.95, 'Finish / Sublimated': 43.05, 'Genuine Walnut / Double Plate': 66.05, 'Genuine Walnut / Sub': 54.55, 'Red Alder & Walnut': 66.05, 'Piano (Premium)': 69.95 },
+    '10.5" x 13"': { 'Finish / Double Plate': 52.35, 'Finish / Sublimated': 46.15, 'Genuine Walnut / Double Plate': 84.95, 'Genuine Walnut / Sub': 71.35, 'Red Alder & Walnut': 67.25, 'Piano (Premium)': 84.95 },
+    '12" x 15"':   { 'Finish / Double Plate': 56.75, 'Finish / Sublimated': 51.35, 'Genuine Walnut / Double Plate': 102.25, 'Genuine Walnut / Sub': 91.80, 'Red Alder & Walnut': null, 'Piano (Premium)': 104.95 },
+    '12" x 18"':   { 'Finish / Double Plate': null,  'Finish / Sublimated': null,  'Genuine Walnut / Double Plate': 134.95, 'Genuine Walnut / Sub': 106.25, 'Red Alder & Walnut': null, 'Piano (Premium)': null },
+    '15" x 18"':   { 'Finish / Double Plate': 60.35, 'Finish / Sublimated': null,  'Genuine Walnut / Double Plate': null,   'Genuine Walnut / Sub': null,   'Red Alder & Walnut': null, 'Piano (Premium)': null },
+    '16" x 20"':   { 'Finish / Double Plate': 65.05, 'Finish / Sublimated': null,  'Genuine Walnut / Double Plate': 168.05, 'Genuine Walnut / Sub': 154.95, 'Red Alder & Walnut': null, 'Piano (Premium)': 189.95 },
+    '18" x 24"':   { 'Finish / Double Plate': null,  'Finish / Sublimated': null,  'Genuine Walnut / Double Plate': 243.10, 'Genuine Walnut / Sub': 243.10, 'Red Alder & Walnut': null, 'Piano (Premium)': 243.10 },
+    'STSD185 8"x12" SD State': { 'Walnut Finish Black Edge': 57.95 }
+  };
+
+  function plaqueDiscount(qty) {
+    if (qty >= 100) return 0.90;
+    if (qty >= 50)  return 0.92;
+    if (qty >= 20)  return 0.95;
+    if (qty >= 10)  return 0.97;
+    return 1.00;
+  }
+  function plaqueDiscountLabel(qty) {
+    if (qty >= 100) return '10% volume discount (100+)';
+    if (qty >= 50)  return '8% volume discount (50-99)';
+    if (qty >= 20)  return '5% volume discount (20-49)';
+    if (qty >= 10)  return '3% volume discount (10-19)';
+    return 'Standard pricing (1-9)';
+  }
+
+  function buildFinishOptions(size) {
+    var row = PLAQUE_PRICES[size];
+    if (!row) return '<option value="">— select finish —</option>';
+    var opts = Object.keys(row)
+      .filter(function(f) { return row[f] !== null; })
+      .map(function(f) { return '<option value="' + row[f] + '" data-finish="' + f.replace(/"/g, '&quot;') + '">' + f + ' — ' + fmt(row[f]) + '</option>'; })
+      .join('');
+    return '<option value="">— select finish —</option>' + opts;
+  }
+
+  function buildSizeOptions() {
+    return '<option value="">— select size —</option>' +
+      Object.keys(PLAQUE_PRICES).map(function(s) {
+        var safeVal = s.replace(/"/g, '&quot;');
+        return '<option value="' + safeVal + '">' + s + '</option>';
+      }).join('');
+  }
+
+  function calcSurcharge(subtotal) {
+    if (subtotal < 50)  return 0;
+    if (subtotal < 100) return subtotal * 0.05;
+    if (subtotal < 400) return subtotal * 0.10;
+    return 45;
+  }
+  function surchargeDesc(subtotal) {
+    if (subtotal < 50)  return null;
+    if (subtotal < 100) return '5% of ' + fmt(subtotal) + ' order subtotal ($50-$99.99 tier)';
+    if (subtotal < 400) return '10% of ' + fmt(subtotal) + ' order subtotal ($100-$399.99 tier)';
+    return '$45 flat (order subtotal $400+ tier)';
+  }
+
+  function addLine(type) {
+    lineCount++;
+    const id = lineCount;
+    const div = document.createElement('div');
+    div.className = 'line-item';
+    div.id = 'line-' + id;
+    const isPlaque = type === 'plaque';
+    div.innerHTML = '<div class="li-header"><span class="li-num">Item ' + id + '</span><button class="li-remove" onclick="removeLine(' + id + ')">Remove</button></div>'
+      // Item type — full width on its own row
+      + '<div class="field" style="margin-bottom:12px"><label>Item type</label>'
+      + '<select class="li-type" onchange="onTypeChange(' + id + ', this.value)">'
+      + '<option value="trophy"'    + (type==='trophy'   ?' selected':'') + '>&#x1F3C6; Trophy / Medal</option>'
+      + '<option value="award"'     + (type==='award'    ?' selected':'') + '>&#x1F537; Award (Glass / Crystal / Acrylic)</option>'
+      + '<option value="plaque"'    + (type==='plaque'   ?' selected':'') + '>&#x1F4CB; Plaque</option>'
+      + '<option value="engraving"' + (type==='engraving'?' selected':'') + '>&#x270F;&#xFE0F; Engraving only</option>'
+      + '</select></div>'
+      // Plaque picker (shown for plaques only) — size + style side by side
+      + '<div class="li-plaque-fields" style="display:' + (isPlaque ? 'block' : 'none') + '">'
+      + '<div class="grid-2" style="margin-bottom:10px">'
+      + '<div class="field" style="margin-bottom:0"><label>Plaque size</label>'
+      + '<select class="li-plaque-size" onchange="onPlaqueSize(' + id + ')">' + buildSizeOptions() + '</select></div>'
+      + '<div class="field" style="margin-bottom:0"><label>Style</label>'
+      + '<select class="li-plaque-finish" onchange="onPlaqueFinish(' + id + ')" disabled><option value="">— select size first —</option></select></div>'
+      + '</div>'
+      + '<div id="plaque-hint-' + id + '" style="font-size:12px;color:var(--tan-dark);font-weight:600;margin-bottom:10px;min-height:16px"></div>'
+      + '</div>'
+      // SKU — always shown, comes after dropdowns so user types after selecting size/style
+      + '<div class="field" style="margin-bottom:12px"><label>SKU <span style="font-weight:400;font-size:11px;color:var(--muted)">'
+      + (isPlaque ? '— auto-filled after selecting size &amp; style, prepend your code if needed' : '— optional')
+      + '</span></label>'
+      + '<input type="text" class="li-sku" placeholder="' + (isPlaque ? 'e.g. SBP810 (auto-fills after style selection)' : 'e.g. BH1 - Baseball Acrylic Display Case with Base') + '"></div>'
+      // Qty — always visible
+      + '<div class="li-qty-row"><div class="field" style="max-width:160px;margin-bottom:12px"><label>Qty</label>'
+      + '<input type="number" class="li-qty" value="1" min="1" oninput="onQtyChange(' + id + ')"></div></div>'
+      // COGS / margin / retail / last year — hidden for plaques
+      + '<div class="grid-3 li-pricing-fields" style="' + (isPlaque ? 'display:none' : '') + '">'
+      + '<div class="field"><label>COGS per unit $</label><input type="number" class="li-cogs" placeholder="0.00" step="0.01" min="0"></div>'
+      + '<div class="field"><label>Target margin %</label><input type="number" class="li-margin" value="55" min="1" max="99" step="1" placeholder="e.g. 57"></div>'
+      + '<div class="field"><label>Last year\'s price $</label><input type="number" class="li-lastyear" placeholder="optional" step="0.01" min="0"></div>'
+      + '</div>'
+      + '<div class="grid-2 li-retail-field" style="' + (isPlaque ? 'display:none' : '') + '">'
+      + '<div class="field"><label>Retail / website price $</label><input type="number" class="li-retail" placeholder="0.00" step="0.01" min="0"></div>'
+      + '<div class="field"><label>Discount % <span style="font-weight:400;font-size:11px;color:var(--muted)">(optional)</span></label><input type="number" class="li-discount-pct" placeholder="e.g. 10" min="0" max="100" step="0.5"></div>'
+      + '</div>';
+    document.getElementById('line-items-container').appendChild(div);
+  }
+
+  function removeLine(id) { document.getElementById('line-' + id)?.remove(); }
+
+  function onTypeChange(id, newType) {
+    const line = document.getElementById('line-' + id);
+    if (!line) return;
+    const isPlaque = newType === 'plaque';
+    line.querySelector('.li-plaque-fields').style.display = isPlaque ? 'block' : 'none';
+    line.querySelector('.li-pricing-fields').style.display = isPlaque ? 'none' : '';
+    line.querySelector('.li-retail-field').style.display = isPlaque ? 'none' : '';
+    const skuEl = line.querySelector('.li-sku');
+    if (skuEl) {
+      skuEl.value = '';
+      skuEl.removeAttribute('data-user-sku');
+      skuEl.placeholder = isPlaque ? 'e.g. SBP810 (auto-fills after style selection)' : 'e.g. JWAG1095';
+    }
+    if (!isPlaque) { const r = line.querySelector('.li-retail'); if (r) r.value = ''; }
+  }
+
+  function onPlaqueSize(id) {
+    const line = document.getElementById('line-' + id);
+    const size = line.querySelector('.li-plaque-size').value;
+    const finishSel = line.querySelector('.li-plaque-finish');
+    finishSel.innerHTML = size ? buildFinishOptions(size) : '<option value="">— select size first —</option>';
+    finishSel.disabled = !size;
+    line.querySelector('.li-retail').value = '';
+    const skuEl = line.querySelector('.li-sku');
+    if (skuEl) { skuEl.value = ''; skuEl.removeAttribute('data-user-sku'); }
+    document.getElementById('plaque-hint-' + id).textContent = '';
+  }
+
+  function onPlaqueFinish(id) {
+    var line = document.getElementById('line-' + id);
+    var size = line.querySelector('.li-plaque-size').value;
+    var finishSel = line.querySelector('.li-plaque-finish');
+    var basePrice = parseFloat(finishSel.value) || 0;
+    var sel = finishSel.options[finishSel.selectedIndex];
+    var finishName = sel ? (sel.getAttribute('data-finish') || sel.text.split(' — ')[0]) : '';
+    var qty = parseInt(line.querySelector('.li-qty').value) || 1;
+    applyPlaquePrice(id, size, finishName, basePrice, qty);
+  }
+
+  function onQtyChange(id) {
+    var line = document.getElementById('line-' + id);
+    if (line.querySelector('.li-type').value !== 'plaque') return;
+    var finishSel = line.querySelector('.li-plaque-finish');
+    var basePrice = parseFloat(finishSel.value) || 0;
+    if (!basePrice) return;
+    var size = line.querySelector('.li-plaque-size').value;
+    var sel = finishSel.options[finishSel.selectedIndex];
+    var finishName = sel ? (sel.getAttribute('data-finish') || sel.text.split(' — ')[0]) : '';
+    var qty = parseInt(line.querySelector('.li-qty').value) || 1;
+    applyPlaquePrice(id, size, finishName, basePrice, qty);
+  }
+
+  function applyPlaquePrice(id, size, finishName, basePrice, qty) {
+    if (!basePrice) return;
+    const line = document.getElementById('line-' + id);
+    const mult = plaqueDiscount(qty);
+    const discountedPrice = Math.round(basePrice * mult * 100) / 100;
+    line.querySelector('.li-retail').value = discountedPrice.toFixed(2);
+    const skuEl = line.querySelector('.li-sku');
+    if (skuEl) {
+      // Auto-fill with size · style — user can prepend their SKU code manually
+      skuEl.value = size + ' - ' + finishName;
+      skuEl.removeAttribute('data-user-sku');
+    }
+    const hint = document.getElementById('plaque-hint-' + id);
+    hint.textContent = mult < 1
+      ? 'Base ' + fmt(basePrice) + ' x ' + mult + ' (' + plaqueDiscountLabel(qty) + ') = ' + fmt(discountedPrice) + ' per unit'
+      : fmt(discountedPrice) + ' per unit · ' + plaqueDiscountLabel(qty);
+  }
+
+  function recommendPrice(cogs, retail, lastYear, targetMargin) {
+    const c = [];
+    if (cogs > 0)    c.push({ price: cogs / (1 - targetMargin), source: 'COGS at ' + fmtPct(targetMargin) + ' margin' });
+    if (retail > 0)  c.push({ price: retail, source: 'Retail / website price' });
+    if (lastYear > 0) c.push({ price: lastYear * 1.05, source: 'Last year + 5%' });
+    if (lastYear > 0 && cogs > 0) {
+      const cp = cogs / (1 - targetMargin);
+      if (Math.abs(cp - lastYear) / lastYear > 0.12) c.push({ price: (cp + lastYear) / 2, source: 'Softened average — big jump detected' });
+    }
+    return c;
+  }
+
+  function calculateQuote() {
+    const lines = document.querySelectorAll('.line-item');
+    if (!lines.length) { alert('Please add at least one line item.'); return; }
+
+    const custName    = document.getElementById('cust-name').value.trim() || 'Customer';
+    // Read discount from first line item that has one entered
+    const discountInput = document.querySelector('.li-discount-pct');
+    const discountPct   = discountInput ? (parseFloat(discountInput.value) || 0) : 0;
+    const discountMult  = discountPct > 0 ? (1 - discountPct / 100) : 1;
+    const notes         = '';
+
+    let lineResults = [], hasErrors = false;
+
+    lines.forEach(line => {
+      const type     = line.querySelector('.li-type').value;
+      const skuEl    = line.querySelector('.li-sku');
+      const sku      = skuEl ? skuEl.value.trim() : '';
+      const desc     = sku || typeLabels[type];
+      const qty      = parseFloat(line.querySelector('.li-qty').value) || 1;
+      const isPlaque = type === 'plaque';
+
+      // Plaque: price is fixed from price sheet (stored in li-retail by applyPlaquePrice)
+      if (isPlaque) {
+        const fixedPrice = parseFloat(line.querySelector('.li-retail').value) || 0;
+        if (!fixedPrice) { hasErrors = true; return; } // no size/finish selected yet
+        lineResults.push({
+          type, desc, qty,
+          cogs: 0, retail: fixedPrice, lastYear: 0, tm: 0,
+          candidates: [], rec: { source: 'Plaque price sheet' },
+          recPrice: fixedPrice, consPrice: fixedPrice, aggPrice: fixedPrice,
+          recMargin: 0, flags: [], isPlaque: true
+        });
+        return;
+      }
+
+      const cogs     = parseFloat(line.querySelector('.li-cogs').value) || 0;
+      const retail   = parseFloat(line.querySelector('.li-retail').value) || 0;
+      const lastYear = parseFloat(line.querySelector('.li-lastyear').value) || 0;
+      const tm       = (parseFloat(line.querySelector('.li-margin').value) || 55) / 100;
+
+      if (!cogs && !retail && !lastYear) { hasErrors = true; return; }
+
+      const candidates = recommendPrice(cogs, retail, lastYear, tm);
+      let rec = null, best = Infinity;
+      candidates.forEach(c => {
+        const m = calcMargin(c.price, cogs);
+        const score = (m >= tm - 0.03 ? 0 : 100) + (retail > 0 ? Math.abs(c.price - retail) / retail : 0);
+        if (score < best) { best = score; rec = c; }
+      });
+      if (!rec && candidates.length) rec = candidates[0];
+
+      // Rule: if recommended price is higher than last year but lower than last year + 5%,
+      // use last year + 5% instead — never leave that upside on the table
+      let rawRecPrice = rec ? rec.price : (cogs > 0 ? cogs / (1 - tm) : retail || lastYear);
+      if (lastYear > 0 && rawRecPrice > lastYear && rawRecPrice < lastYear * 1.05) {
+        rawRecPrice = lastYear * 1.05;
+        rec = { source: rec ? rec.source + ' (floored to last year +5%)' : 'Last year + 5% (floored up)' };
+      }
+
+      const recPrice  = roundToQuarter(rawRecPrice);
+      const consPrice = roundToQuarter(lastYear > 0 ? Math.max(lastYear, recPrice * 0.95) : recPrice * 0.95);
+      const aggPrice  = roundToQuarter(retail > 0   ? Math.max(retail, recPrice * 1.05)  : recPrice * 1.08);
+      const recMargin = calcMargin(recPrice, cogs);
+
+      const flags = [];
+      if (lastYear > 0 && recPrice > lastYear * 1.12)
+        flags.push({ type: 'warn', text: `Recommended is ${fmtPct((recPrice-lastYear)/lastYear)} above last year (${fmt(lastYear)}). Softened average may be safer.` });
+      if (cogs > 0 && recMargin < 0.45)
+        flags.push({ type: 'warn', text: `Margin at recommended is ${fmtPct(recMargin)} — below 45%. Review COGS or price higher.` });
+      else if (cogs > 0 && recMargin >= tm)
+        flags.push({ type: 'ok', text: `Recommended hits ${fmtPct(recMargin)} — meets your ${fmtPct(tm)} target.` });
+
+      lineResults.push({ type, desc, qty, cogs, retail, lastYear, tm, candidates, rec, recPrice, consPrice, aggPrice, recMargin, flags, isPlaque: false });
+    });
+
+    if (hasErrors) { alert('One or more items is missing pricing data. For plaques, make sure you have selected a size and finish. For other items, add at least COGS, retail, or last year\'s price.'); return; }
+    if (!lineResults.length) return;
+
+    // Detect whether all lines are plaques (fixed price mode)
+    const allPlaques = lineResults.every(l => l.isPlaque);
+
+    if (hasErrors) { alert('One or more items is missing all pricing data. Add at least COGS, retail, or last year\'s price.'); return; }
+    if (!lineResults.length) return;
+
+    const totalCogs = lineResults.reduce((s, l) => s + l.cogs * l.qty, 0);
+    const subRec    = lineResults.reduce((s, l) => s + l.recPrice  * l.qty, 0);
+    const subCons   = lineResults.reduce((s, l) => s + l.consPrice * l.qty, 0);
+    const subAgg    = lineResults.reduce((s, l) => s + l.aggPrice  * l.qty, 0);
+
+    // Apply discount to subtotal before surcharge
+    const discountedSubRec  = subRec  * discountMult;
+    const discountedSubCons = subCons * discountMult;
+    const discountedSubAgg  = subAgg  * discountMult;
+
+    const surchargeRec  = calcSurcharge(discountedSubRec);
+    const surchargeCons = calcSurcharge(discountedSubCons);
+    const surchargeAgg  = calcSurcharge(discountedSubAgg);
+
+    const totRec  = discountedSubRec  + surchargeRec;
+    const totCons = discountedSubCons + surchargeCons;
+    const totAgg  = discountedSubAgg  + surchargeAgg;
+    const mRec    = totalCogs > 0 ? (totRec  - totalCogs) / totRec  : 0;
+    const mCons   = totalCogs > 0 ? (totCons - totalCogs) / totCons : 0;
+    const mAgg    = totalCogs > 0 ? (totAgg  - totalCogs) / totAgg  : 0;
+
+    function buildBreakdown(scenario) {
+      const lbl = { conservative:'Conservative', recommended:'Recommended', aggressive:'Aggressive' }[scenario];
+      let t = `<div class="scenario-label">Showing: ${lbl} prices</div>`;
+      t += `<table class="breakdown-table"><thead><tr><th>SKU / Item</th><th>Qty</th><th>Unit price</th><th>Line total</th></tr></thead><tbody>`;
+      let sub = 0;
+      lineResults.forEach(l => {
+        const p  = scenario==='conservative' ? l.consPrice : scenario==='aggressive' ? l.aggPrice : l.recPrice;
+        const lt = p * l.qty; sub += lt;
+        t += `<tr>
+          <td>${l.desc}<br><span style="font-size:11px;color:var(--muted)">${typeLabels[l.type]}</span></td>
+          <td>${l.qty}</td><td>${fmt(p)}</td><td>${fmt(lt)}</td></tr>`;
+      });
+
+      // Discount row
+      if (discountPct > 0) {
+        const discountAmt = sub * (discountPct / 100);
+        t += `<tr style="color:var(--green)">
+          <td style="font-style:italic">Discount (${discountPct}%)</td>
+          <td></td><td></td><td>-${fmt(discountAmt)}</td></tr>`;
+        sub = sub - discountAmt;
+      }
+
+      const sc = calcSurcharge(sub);
+      const scNote = surchargeDesc(sub);
+      if (sc > 0) {
+        t += `<tr class="surcharge-row">
+          <td>Materials surcharge<br><span style="font-size:11px">${scNote}</span></td>
+          <td>1</td><td>${fmt(sc)}</td><td>${fmt(sc)}</td></tr>`;
+      }
+      const ot = sub + sc;
+      const om = totalCogs > 0 ? (ot - totalCogs) / ot : 0;
+      const profit = totalCogs > 0 ? ot - totalCogs : null;
+      t += `<tr class="total-row"><td colspan="2">Order total</td>
+        <td style="text-align:right;font-size:11px;color:var(--muted);font-weight:400">${fmtPctExact(om)} margin${profit !== null ? ' · ' + fmt(profit) + ' profit' : ''}</td>
+        <td>${fmt(ot)}</td></tr></tbody></table>`;
+      return t;
+    }
+
+    function buildReasoning(scenario) {
+      let html = '';
+      lineResults.forEach(l => {
+        const price  = scenario==='conservative' ? l.consPrice : scenario==='aggressive' ? l.aggPrice : l.recPrice;
+        const margin = calcMargin(price, l.cogs);
+        html += `<div class="reasoning-block"><div class="rb-title">${l.desc}</div>`;
+
+        if (l.isPlaque) {
+          html += `<div class="rb-item">Price from JD's plaque price sheet (2025–2026).</div>`;
+          html += `<div class="rb-item">Qty ${l.qty} × ${fmt(l.recPrice)} = ${fmt(l.recPrice * l.qty)}</div>`;
+          const disc = plaqueDiscount(l.qty);
+          if (disc < 1) html += `<div class="rb-item">Volume discount applied: ${plaqueDiscountLabel(l.qty)}</div>`;
+        } else if (scenario === 'recommended') {
+          if (l.rec) html += `<div class="rb-item">Source: ${l.rec.source}</div>`;
+          if (l.cogs > 0)    html += `<div class="rb-item">COGS ${fmt(l.cogs)} → at ${fmtPct(l.tm)} margin: ${fmt(l.cogs/(1-l.tm))}</div>`;
+          if (l.retail > 0)  html += `<div class="rb-item">Retail / website: ${fmt(l.retail)} (${fmtPct(calcMargin(l.retail,l.cogs))} margin)</div>`;
+          if (l.lastYear > 0) html += `<div class="rb-item">Last year: ${fmt(l.lastYear)} → +5%: ${fmt(l.lastYear*1.05)}</div>`;
+          if (l.lastYear > 0 && l.cogs > 0) {
+            const cp = l.cogs/(1-l.tm);
+            if (Math.abs(cp-l.lastYear)/l.lastYear > 0.12) html += `<div class="rb-item">Softened average (big jump): ${fmt((cp+l.lastYear)/2)}</div>`;
+          }
+          l.flags.forEach(f => {
+            const icon = f.type==='warn'?'⚠️':f.type==='ok'?'✓':'ℹ';
+            html += `<div class="flag flag-${f.type}"><span class="flag-icon">${icon}</span><span>${f.text}</span></div>`;
+          });
+
+        } else if (scenario === 'conservative') {
+          html += `<div class="rb-scenario">Conservative reasoning</div>`;
+          if (l.lastYear > 0)
+            html += `<div class="rb-item">Anchored near last year's price (${fmt(l.lastYear)}) to avoid sticker shock on repeat orders.</div>`;
+          html += `<div class="rb-item">Unit price: ${fmt(price)} | Margin: ${l.cogs > 0 ? fmtPct(margin) : 'n/a (no COGS)'}</div>`;
+          if (l.cogs > 0 && margin < 0.45)
+            html += `<div class="flag flag-warn"><span class="flag-icon">⚠️</span><span>Margin is thin at ${fmtPct(margin)} — only use if retaining this customer is the priority over margin.</span></div>`;
+          else if (l.cogs > 0)
+            html += `<div class="flag flag-info"><span class="flag-icon">ℹ</span><span>Valid option for price-sensitive or long-standing accounts where relationship matters more than maximizing margin.</span></div>`;
+
+        } else {
+          html += `<div class="rb-scenario">Aggressive reasoning</div>`;
+          if (l.retail > 0)
+            html += `<div class="rb-item">Pushes toward full retail / website price (${fmt(l.retail)}) — valid when turnaround, quality, or urgency justifies it.</div>`;
+          html += `<div class="rb-item">Unit price: ${fmt(price)} | Margin: ${l.cogs > 0 ? fmtPct(margin) : 'n/a (no COGS)'}</div>`;
+          if (l.cogs > 0 && margin >= 0.60)
+            html += `<div class="flag flag-ok"><span class="flag-icon">✓</span><span>Strong margin at ${fmtPct(margin)} — use when competitive pressure is low or the customer values speed and expertise over price.</span></div>`;
+          else if (l.lastYear > 0 && price > l.lastYear * 1.15)
+            html += `<div class="flag flag-warn"><span class="flag-icon">⚠️</span><span>Price is ${fmtPct((price-l.lastYear)/l.lastYear)} above last year — have a reason ready if the customer asks.</span></div>`;
+        }
+        html += `</div>`;
+      });
+      return html;
+    }
+
+    document.getElementById('empty-state').style.display = 'none';
+    const panel = document.getElementById('results-panel');
+
+    let html = `<div class="result-customer">${custName}</div><div class="result-title">Quote summary</div>`;
+    if (discountPct > 0) {
+      html += `<div style="font-size:12px;font-weight:600;color:var(--green);background:var(--green-bg);border:1px solid #a8d8bc;border-radius:8px;padding:7px 12px;margin-bottom:12px">
+        ${discountPct}% discount applied to product subtotal</div>`;
+    }
+
+    if (allPlaques) {
+      // Single quoted price card — no scenario switching
+      const sc = calcSurcharge(subRec);
+      const grandTotal = totRec;
+      html += `
+        <div class="price-cards" style="grid-template-columns:1fr">
+          <div class="price-card recommended active-scenario" style="cursor:default">
+            <div class="rec-badge">Quoted price</div>
+            <div class="pc-price">${fmt(grandTotal)}</div>
+            <div class="pc-margin">Per JD's plaque price sheet${sc > 0 ? ' · incl. ' + fmt(sc) + ' surcharge' : ''}</div>
+          </div>
+        </div>
+        <div id="breakdown-container">${buildBreakdown('recommended')}</div>
+        <div class="breakdown-title">Line details</div>
+        <div id="reasoning-container">${buildReasoning('recommended')}</div>`;
+    } else {
+      // Mixed order — three scenario cards, plaque lines are fixed
+      html += `
+        <div class="breakdown-title">Price range — click to switch view</div>
+        <div class="price-cards">
+          <div class="price-card" id="card-conservative" onclick="switchScenario('conservative')">
+            <div class="pc-label">Conservative</div>
+            <div class="pc-price">${fmt(totCons)}</div>
+            <div class="pc-margin">${fmtPctExact(mCons)} margin</div>
+            ${totalCogs > 0 ? `<div class="pc-margin">${fmt(totCons - totalCogs)} profit</div>` : ''}
+          </div>
+          <div class="price-card recommended active-scenario" id="card-recommended" onclick="switchScenario('recommended')">
+            <div class="rec-badge">Recommended</div>
+            <div class="pc-price">${fmt(totRec)}</div>
+            <div class="pc-margin">${fmtPctExact(mRec)} margin</div>
+            ${totalCogs > 0 ? `<div class="pc-margin">${fmt(totRec - totalCogs)} profit</div>` : ''}
+          </div>
+          <div class="price-card" id="card-aggressive" onclick="switchScenario('aggressive')">
+            <div class="pc-label">Aggressive</div>
+            <div class="pc-price">${fmt(totAgg)}</div>
+            <div class="pc-margin">${fmtPctExact(mAgg)} margin</div>
+            ${totalCogs > 0 ? `<div class="pc-margin">${fmt(totAgg - totalCogs)} profit</div>` : ''}
+          </div>
+        </div>
+        <div id="breakdown-container">${buildBreakdown('recommended')}</div>
+        <div class="breakdown-title">Pricing reasoning</div>
+        <div id="reasoning-container">${buildReasoning('recommended')}</div>`;
+    }
+
+    if (notes) html += `<div class="reasoning-block" style="margin-top:4px"><div class="rb-title">Your notes</div><div class="rb-item">${notes}</div></div>`;
+
+    // Market price intel section — only for non-plaque lines with a SKU
+    const searchableLines = lineResults.filter(l => !l.isPlaque && l.desc && l.desc !== typeLabels[l.type]);
+    if (searchableLines.length) {
+      html += `<div class="breakdown-title" style="margin-top:16px">Market price intel</div>`;
+      html += `<div id="market-intel-container">`;
+      searchableLines.forEach(l => {
+        html += `<div class="reasoning-block" id="market-${l.desc.replace(/[^a-z0-9]/gi,'_')}">
+          <div class="rb-title">${l.desc}</div>
+          <div class="rb-item" style="color:var(--muted)">Searching online prices...</div>
+        </div>`;
+      });
+      html += `</div>`;
+    }
+
+    panel.innerHTML = html;
+    panel._data = { custName, lineResults, totalCogs, discountPct, discountMult,
+      subRec, subCons, subAgg,
+      totRec, totCons, totAgg, mRec, mCons, mAgg, activeScenario: 'recommended',
+      buildBreakdown, buildReasoning };
+
+    // Fire SKU market searches after rendering
+    if (searchableLines.length) {
+      searchableLines.forEach(l => fetchMarketPrice(l.desc, l.recPrice));
+    }
+  }
+
+  function switchScenario(scenario) {
+    const panel = document.getElementById('results-panel');
+    const d = panel._data;
+    if (!d) return;
+    d.activeScenario = scenario;
+    ['conservative','recommended','aggressive'].forEach(s => document.getElementById('card-'+s)?.classList.remove('active-scenario'));
+    document.getElementById('card-'+scenario)?.classList.add('active-scenario');
+    document.getElementById('breakdown-container').innerHTML = d.buildBreakdown(scenario);
+    document.getElementById('reasoning-container').innerHTML = d.buildReasoning(scenario);
+  }
+
+
+
+  // ── API Key management ──
+  // Key is stored in localStorage — never in the file itself
+  function getApiKey() {
+    return localStorage.getItem('jds_anthropic_key') || '';
+  }
+  function promptForApiKey() {
+    const existing = getApiKey();
+    const key = window.prompt(
+      'Enter your Anthropic API key to enable market price search.\nIt will be saved in this browser only — never shared.\n\nKey starts with sk-ant-...',
+      existing
+    );
+    if (key && key.trim().startsWith('sk-ant-')) {
+      localStorage.setItem('jds_anthropic_key', key.trim());
+      return key.trim();
+    } else if (key !== null) {
+      alert('That doesn\'t look like a valid Anthropic API key. It should start with sk-ant-');
+    }
+    return null;
+  }
+
+  async function fetchMarketPrice(sku, ourPrice) {
+    const safeId = sku.replace(/[^a-z0-9]/gi, '_');
+    const container = document.getElementById('market-' + safeId);
+    if (!container) return;
+
+    let apiKey = getApiKey();
+    if (!apiKey) {
+      container.innerHTML = '<div class="rb-title">' + sku + '</div>'
+        + '<div class="rb-item" style="color:var(--amber)">No API key set. '
+        + '<a href="#" onclick="event.preventDefault();promptForApiKey();fetchMarketPrice(\'' + sku.replace(/'/g,"\\'") + '\',' + ourPrice + ')" '
+        + 'style="color:var(--navy);font-weight:600">Click here to add your key</a> and retry.</div>';
+      return;
+    }
+
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 1000,
+          tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+          system: 'You are a pricing research assistant for an awards and trophies shop. Search for the product SKU provided and return ONLY a JSON object with no markdown or preamble. The JSON must have these fields: "found" (boolean), "avg_price" (number or null — the average retail price in USD), "low_price" (number or null), "high_price" (number or null), "sources" (array of up to 3 strings like "Supplier X: $42.00"), "notes" (string — 1 sentence summary). If you cannot find pricing for the SKU, set found to false.',
+          messages: [{
+            role: 'user',
+            content: 'Find current retail/wholesale pricing for: ' + sku + '. This is an awards/trophies product. Search for this and return the JSON pricing data.'
+          }]
+        })
+      });
+
+      const data = await response.json();
+
+      // Handle API errors
+      if (data.error) {
+        container.innerHTML = '<div class="rb-title">' + sku + '</div>'
+          + '<div class="rb-item" style="color:var(--amber)">API error: ' + data.error.message + '</div>';
+        return;
+      }
+
+      // Extract all text blocks — web search responses may have tool_use blocks too
+      const allContent = data.content || [];
+      const textBlocks = allContent.filter(b => b.type === 'text');
+      const rawText = textBlocks.map(b => b.text).join('');
+
+      let result;
+      try {
+        const clean = rawText.replace(/```json|```/g, '').trim();
+        result = JSON.parse(clean);
+      } catch(e) {
+        result = { found: false, notes: 'Could not parse pricing data.' };
+      }
+
+      if (!container) return;
+      let inner = '<div class="rb-title">' + sku + ' — Market prices</div>';
+
+      if (!result.found || !result.avg_price) {
+        inner += '<div class="rb-item" style="color:var(--muted)">No market pricing found for this SKU. Try a manufacturer part number or vendor code.</div>';
+      } else {
+        const ourFmt = ourPrice ? fmt(ourPrice) : null;
+        const diff = ourPrice && result.avg_price ? ((ourPrice - result.avg_price) / result.avg_price * 100).toFixed(1) : null;
+        const diffColor = diff === null ? '' : parseFloat(diff) < -10 ? 'color:var(--green)' : parseFloat(diff) > 10 ? 'color:var(--amber)' : 'color:var(--text)';
+
+        inner += '<div class="rb-item"><strong style="color:var(--navy)">Avg market price: ' + fmt(result.avg_price) + '</strong>';
+        if (result.low_price && result.high_price) inner += ' &nbsp;(range: ' + fmt(result.low_price) + ' – ' + fmt(result.high_price) + ')';
+        inner += '</div>';
+
+        if (ourFmt && diff !== null) {
+          const sign = parseFloat(diff) >= 0 ? '+' : '';
+          inner += '<div class="rb-item" style="' + diffColor + '">Our recommended ' + ourFmt + ' is ' + sign + diff + '% vs market avg</div>';
+        }
+
+        if (result.sources && result.sources.length) {
+          result.sources.forEach(s => { inner += '<div class="rb-item" style="color:var(--muted)">' + s + '</div>'; });
+        }
+
+        if (result.notes) inner += '<div class="rb-item" style="color:var(--muted);font-style:italic">' + result.notes + '</div>';
+      }
+
+      container.innerHTML = inner;
+
+    } catch(err) {
+      if (container) container.innerHTML = '<div class="rb-title">' + sku + '</div>'
+        + '<div class="rb-item" style="color:var(--red)">Error: ' + err.message + '</div>'
+        + '<div class="rb-item" style="color:var(--muted)">If this says "Failed to fetch" the API call is being blocked. Check that your key is entered via ⚙ API Key and try again.</div>';
+    }
+  }
+
+  addLine('award');
+</script>
+</body>
+</html>
