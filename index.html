@@ -718,10 +718,55 @@
 
       let result;
       try {
-        const clean = rawText.replace(/```json|```/g, '').trim();
-        result = JSON.parse(clean);
+        // Try several parsing strategies in order
+        let clean = rawText.replace(/```json|```/g, '').trim();
+
+        // Strategy 1: direct parse
+        try { result = JSON.parse(clean); }
+        catch(e1) {
+          // Strategy 2: find JSON object anywhere in the text
+          const jsonMatch = clean.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            try { result = JSON.parse(jsonMatch[0]); }
+            catch(e2) {
+              // Strategy 3: extract key fields manually from text
+              const avgMatch = rawText.match(/avg_price["\s:]+(\d+\.?\d*)/);
+              const lowMatch = rawText.match(/low_price["\s:]+(\d+\.?\d*)/);
+              const highMatch = rawText.match(/high_price["\s:]+(\d+\.?\d*)/);
+              const foundMatch = rawText.match(/found["\s:]+(true|false)/);
+              if (avgMatch) {
+                result = {
+                  found: foundMatch ? foundMatch[1] === 'true' : true,
+                  avg_price: parseFloat(avgMatch[1]),
+                  low_price: lowMatch ? parseFloat(lowMatch[1]) : null,
+                  high_price: highMatch ? parseFloat(highMatch[1]) : null,
+                  sources: [],
+                  notes: 'Pricing extracted from search results.'
+                };
+              } else {
+                // Strategy 4: look for dollar amounts in the text and use them
+                const prices = [...rawText.matchAll(/\$(\d+\.?\d*)/g)].map(m => parseFloat(m[1])).filter(p => p > 5 && p < 5000);
+                if (prices.length > 0) {
+                  const avg = prices.reduce((a,b) => a+b, 0) / prices.length;
+                  result = {
+                    found: true,
+                    avg_price: Math.round(avg * 100) / 100,
+                    low_price: Math.min(...prices),
+                    high_price: Math.max(...prices),
+                    sources: [],
+                    notes: 'Prices found in search results — review sources for details.'
+                  };
+                } else {
+                  result = { found: false, notes: 'No pricing data found in search results.' };
+                }
+              }
+            }
+          } else {
+            result = { found: false, notes: 'Search ran but returned no structured pricing.' };
+          }
+        }
       } catch(e) {
-        result = { found: false, notes: 'Could not parse pricing data.' };
+        result = { found: false, notes: 'Search error — try again.' };
       }
 
       if (!container) return;
@@ -732,7 +777,8 @@
         inner += '<div class="rb-item" style="margin-top:4px"><a href="#" onclick="event.preventDefault();fetchMarketPrice(\'' + sku.replace(/'/g,"\\'") + '\',' + ourPrice + ')" style="color:var(--navy);font-size:12px;font-weight:600">↻ Retry search</a></div>';
       } else {
         const ourFmt = ourPrice ? fmt(ourPrice) : null;
-        const diff = ourPrice && result.avg_price ? ((ourPrice - result.avg_price) / result.avg_price * 100).toFixed(1) : null;
+        const diffNum = ourPrice && result.avg_price ? ((ourPrice - result.avg_price) / result.avg_price * 100) : null;
+        const diff = diffNum !== null ? diffNum.toFixed(1) : null;
         const diffColor = diff === null ? '' : parseFloat(diff) < -10 ? 'color:var(--green)' : parseFloat(diff) > 10 ? 'color:var(--amber)' : 'color:var(--text)';
 
         inner += '<div class="rb-item"><strong style="color:var(--navy)">Avg market price: ' + fmt(result.avg_price) + '</strong>';
@@ -749,6 +795,56 @@
         }
 
         if (result.notes) inner += '<div class="rb-item" style="color:var(--muted);font-style:italic">' + result.notes + '</div>';
+
+        // ── Synthesis recommendation ──
+        if (ourPrice && diffNum !== null) {
+          let suggBg, suggColor, suggBorder, suggIcon, suggText;
+
+          if (diffNum < -15) {
+            // Our price is significantly below market — opportunity to go higher
+            suggBg = 'var(--green-bg)'; suggColor = 'var(--green)';
+            suggBorder = '#a8d8bc'; suggIcon = '💡';
+            const gap = fmt(result.avg_price - ourPrice);
+            suggText = 'Your recommended price is well below market average by ' + gap + ' per unit. '
+              + 'The aggressive price of ' + (ourPrice ? fmt(ourPrice * 1.08) : 'n/a') + ' is likely still competitive — '
+              + 'consider starting there, especially for new customers or one-time orders where relationship pricing is less of a factor.';
+          } else if (diffNum < -5) {
+            // Slightly below market — solid position
+            suggBg = 'var(--green-bg)'; suggColor = 'var(--green)';
+            suggBorder = '#a8d8bc'; suggIcon = '✓';
+            suggText = 'Your recommended price is slightly below market — you are well positioned competitively. '
+              + 'If this is a new customer or a competitive bid, the recommended price is strong. '
+              + 'For existing accounts you trust, the aggressive option is defensible given the market data.';
+          } else if (diffNum >= -5 && diffNum <= 5) {
+            // Right at market — confirm and hold
+            suggBg = '#edf2f7'; suggColor = 'var(--navy)';
+            suggBorder = '#b8cfe0'; suggIcon = '🎯';
+            suggText = 'Your recommended price is right in line with market average — pricing looks solid. '
+              + 'No reason to discount unless the customer pushes back. '
+              + 'If they do, you have the conservative option available without sacrificing too much margin.';
+          } else if (diffNum > 5 && diffNum <= 15) {
+            // Modestly above market — flag it
+            suggBg = 'var(--amber-bg)'; suggColor = 'var(--amber)';
+            suggBorder = '#f0d090'; suggIcon = '⚠';
+            suggText = 'Your recommended price is modestly above market average. '
+              + 'This is fine if you are quoting an existing account, a rush order, or a customer who values your service and turnaround. '
+              + 'For a price-sensitive or new customer, consider the conservative price to stay competitive.';
+          } else {
+            // Significantly above market — needs justification
+            suggBg = 'var(--amber-bg)'; suggColor = 'var(--amber)';
+            suggBorder = '#f0d090'; suggIcon = '⚠';
+            const overAmt = fmt(ourPrice - result.avg_price);
+            suggText = 'Your recommended price is ' + overAmt + ' above market average per unit — have a reason ready. '
+              + 'This can be justified by your custom engraving, faster turnaround, or program relationship, '
+              + 'but a price-sensitive customer may push back. The conservative price gets you much closer to market and still protects margin.';
+          }
+
+          inner += '<div style="background:' + suggBg + ';border:1px solid ' + suggBorder + ';border-radius:8px;padding:10px 13px;margin-top:10px">'
+            + '<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:' + suggColor + ';margin-bottom:6px">'
+            + suggIcon + ' Pricing suggestion</div>'
+            + '<div style="font-size:12px;color:' + suggColor + ';line-height:1.6">' + suggText + '</div>'
+            + '</div>';
+        }
       }
 
       container.innerHTML = inner;
