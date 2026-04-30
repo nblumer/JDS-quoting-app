@@ -159,7 +159,7 @@
   function fmtPct(n) { return Math.round(n * 100) + '%'; }
   function fmtPctExact(n) { return (n * 100).toFixed(1).replace(/\.0$/, '') + '%'; }
   function calcMargin(price, cogs) { if (!price || !cogs || price <= 0) return 0; return (price - cogs) / price; }
-  function roundToQuarter(n) { return Math.ceil(n * 4) / 4; }
+  function roundToX95(n) { return Math.round(n) - 0.05; }
 
   // ── Plaque pricing table (retail prices from 2025-2026 price sheet) ──
   const PLAQUE_PRICES = {
@@ -414,9 +414,9 @@
         rec = { source: rec ? rec.source + ' (floored to last year +5%)' : 'Last year + 5% (floored up)' };
       }
 
-      const recPrice  = roundToQuarter(rawRecPrice);
-      const consPrice = roundToQuarter(lastYear > 0 ? Math.max(lastYear, recPrice * 0.95) : recPrice * 0.95);
-      const aggPrice  = roundToQuarter(retail > 0   ? Math.max(retail, recPrice * 1.05)  : recPrice * 1.08);
+      const recPrice  = roundToX95(rawRecPrice);
+      const consPrice = roundToX95(lastYear > 0 ? Math.max(lastYear, recPrice * 0.95) : recPrice * 0.95);
+      const aggPrice  = roundToX95(retail > 0   ? Math.max(retail, recPrice * 1.05)  : recPrice * 1.08);
       const recMargin = calcMargin(recPrice, cogs);
 
       const flags = [];
@@ -552,29 +552,60 @@
     document.getElementById('empty-state').style.display = 'none';
     const panel = document.getElementById('results-panel');
 
-    let html = `<div class="result-customer">${custName}</div><div class="result-title">Quote summary</div>`;
-    if (discountPct > 0) {
-      html += `<div style="font-size:12px;font-weight:600;color:var(--green);background:var(--green-bg);border:1px solid #a8d8bc;border-radius:8px;padding:7px 12px;margin-bottom:12px">
-        ${discountPct}% discount applied to product subtotal</div>`;
+    // ── Build the top-line recommendation summary ──
+    function buildRecommendationBlock() {
+      if (allPlaques) return ''; // plaques don't need a recommendation block
+
+      const recTotal = totRec;
+      const recMarginPct = fmtPctExact(mRec);
+      const recProfit = totalCogs > 0 ? fmt(totRec - totalCogs) : null;
+
+      // Summarize each non-plaque line in one sentence
+      let lineSummaries = lineResults.filter(l => !l.isPlaque).map(l => {
+        const parts = [];
+        if (l.lastYear > 0) {
+          const chg = ((l.recPrice - l.lastYear) / l.lastYear * 100).toFixed(0);
+          const sign = parseFloat(chg) >= 0 ? '+' : '';
+          parts.push(`${sign}${chg}% vs last year (${fmt(l.lastYear)})`);
+        }
+        if (l.cogs > 0) parts.push(`${fmtPctExact(l.recMargin)} margin`);
+        return `<strong>${fmt(l.recPrice)}</strong> for ${l.desc}${parts.length ? ' — ' + parts.join(', ') : ''}`;
+      });
+
+      // Fallback message if no pushback
+      let pushback = '';
+      const bigJumps = lineResults.filter(l => !l.isPlaque && l.lastYear > 0 && l.recPrice > l.lastYear * 1.12);
+      const thinMargins = lineResults.filter(l => !l.isPlaque && l.cogs > 0 && l.recMargin < 0.45);
+      if (bigJumps.length) pushback = `⚠ ${bigJumps[0].desc.split(' ')[0]} is a significant price jump — have the conservative option ready if they push back.`;
+      else if (thinMargins.length) pushback = `⚠ Margin is thin on ${thinMargins[0].desc.split(' ')[0]} — review COGS before sending.`;
+      else pushback = `✓ Pricing looks solid — no flags.`;
+
+      return `<div style="background:var(--navy);border-radius:12px;padding:18px 20px;margin-bottom:16px;color:white">
+        <div style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--tan);margin-bottom:8px">💡 Recommendation</div>
+        <div style="font-size:1.3rem;font-weight:800;color:white;margin-bottom:4px">${fmt(recTotal)}</div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.65);margin-bottom:12px">${recMarginPct} margin${recProfit ? ' · ' + recProfit + ' profit' : ''}${discountPct > 0 ? ' · ' + discountPct + '% discount applied' : ''}</div>
+        ${lineSummaries.map(s => `<div style="font-size:12px;color:rgba(255,255,255,0.85);margin-bottom:5px;line-height:1.5">· ${s}</div>`).join('')}
+        <div style="font-size:12px;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.7)">${pushback}</div>
+      </div>`;
     }
 
+    let html = `<div class="result-customer">${custName}</div><div class="result-title">Quote summary</div>`;
+
+    // Top recommendation block
+    html += buildRecommendationBlock();
+
     if (allPlaques) {
-      // Single quoted price card — no scenario switching
       const sc = calcSurcharge(subRec);
-      const grandTotal = totRec;
       html += `
         <div class="price-cards" style="grid-template-columns:1fr">
           <div class="price-card recommended active-scenario" style="cursor:default">
             <div class="rec-badge">Quoted price</div>
-            <div class="pc-price">${fmt(grandTotal)}</div>
+            <div class="pc-price">${fmt(totRec)}</div>
             <div class="pc-margin">Per JD's plaque price sheet${sc > 0 ? ' · incl. ' + fmt(sc) + ' surcharge' : ''}</div>
           </div>
         </div>
-        <div id="breakdown-container">${buildBreakdown('recommended')}</div>
-        <div class="breakdown-title">Line details</div>
-        <div id="reasoning-container">${buildReasoning('recommended')}</div>`;
+        <div id="breakdown-container">${buildBreakdown('recommended')}</div>`;
     } else {
-      // Mixed order — three scenario cards, plaque lines are fixed
       html += `
         <div class="breakdown-title">Price range — click to switch view</div>
         <div class="price-cards">
@@ -597,14 +628,22 @@
             ${totalCogs > 0 ? `<div class="pc-margin">${fmt(totAgg - totalCogs)} profit</div>` : ''}
           </div>
         </div>
-        <div id="breakdown-container">${buildBreakdown('recommended')}</div>
-        <div class="breakdown-title">Pricing reasoning</div>
-        <div id="reasoning-container">${buildReasoning('recommended')}</div>`;
+        <div id="breakdown-container">${buildBreakdown('recommended')}</div>`;
+
+      // Collapsible details
+      html += `
+        <div style="margin-top:8px">
+          <button onclick="toggleDetails(this)" style="width:100%;padding:8px;background:none;border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;font-family:inherit;text-align:left">
+            ▶ Show pricing details
+          </button>
+          <div id="pricing-details" style="display:none;margin-top:8px">
+            <div class="breakdown-title">Pricing reasoning</div>
+            <div id="reasoning-container">${buildReasoning('recommended')}</div>
+          </div>
+        </div>`;
     }
 
-    if (notes) html += `<div class="reasoning-block" style="margin-top:4px"><div class="rb-title">Your notes</div><div class="rb-item">${notes}</div></div>`;
-
-    // Market price intel section — only for non-plaque lines with a SKU
+    // Market price intel
     const searchableLines = lineResults.filter(l => !l.isPlaque && l.desc && l.desc !== typeLabels[l.type]);
     if (searchableLines.length) {
       html += `<div class="breakdown-title" style="margin-top:16px">Market price intel</div>`;
@@ -630,6 +669,14 @@
         setTimeout(() => fetchMarketPrice(l.desc, l.recPrice), idx * 1500);
       });
     }
+  }
+
+  function toggleDetails(btn) {
+    const details = document.getElementById('pricing-details');
+    if (!details) return;
+    const isHidden = details.style.display === 'none';
+    details.style.display = isHidden ? 'block' : 'none';
+    btn.textContent = (isHidden ? '▼' : '▶') + ' ' + (isHidden ? 'Hide pricing details' : 'Show pricing details');
   }
 
   function switchScenario(scenario) {
