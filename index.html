@@ -624,9 +624,11 @@
       totRec, totCons, totAgg, mRec, mCons, mAgg, activeScenario: 'recommended',
       buildBreakdown, buildReasoning };
 
-    // Fire SKU market searches after rendering
+    // Fire SKU market searches after rendering — staggered to avoid rate limits
     if (searchableLines.length) {
-      searchableLines.forEach(l => fetchMarketPrice(l.desc, l.recPrice));
+      searchableLines.forEach((l, idx) => {
+        setTimeout(() => fetchMarketPrice(l.desc, l.recPrice), idx * 1500);
+      });
     }
   }
 
@@ -690,10 +692,10 @@
           model: 'claude-haiku-4-5-20251001',
           max_tokens: 1000,
           tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-          system: 'You are a pricing research assistant for an awards and trophies shop. Search for the product SKU provided and return ONLY a JSON object with no markdown or preamble. The JSON must have these fields: "found" (boolean), "avg_price" (number or null — the average retail price in USD), "low_price" (number or null), "high_price" (number or null), "sources" (array of up to 3 strings like "Supplier X: $42.00"), "notes" (string — 1 sentence summary). If you cannot find pricing for the SKU, set found to false.',
+          system: 'You are a pricing research assistant for an awards and trophies shop in Sioux Falls, SD. Your job is to find current retail pricing for awards and trophy products. Search aggressively — try the SKU first, then the product description, then search for similar products if needed. Always search at least once before returning results. Return ONLY a valid JSON object with no markdown, no backticks, no preamble. JSON fields: "found" (boolean — true if you found ANY pricing for this product or similar products), "avg_price" (number — best estimate of typical retail price in USD, even if approximate), "low_price" (number or null), "high_price" (number or null), "sources" (array of up to 3 strings like "Awards.com: $42.00"), "notes" (string — 1 sentence including where you found pricing or why it was hard to find). If you truly cannot find anything after searching, set found to false.',
           messages: [{
             role: 'user',
-            content: 'Find current retail/wholesale pricing for: ' + sku + '. This is an awards/trophies product. Search for this and return the JSON pricing data.'
+            content: 'Search for current retail pricing for this awards/trophy product: "' + sku + '". First search the exact SKU, then search the product description if needed. Our price is $' + (ourPrice || 'unknown') + '. Return JSON pricing data.'
           }]
         })
       });
@@ -702,8 +704,10 @@
 
       // Handle API errors
       if (data.error) {
+        const isRateLimit = data.error.type === 'rate_limit_error' || (data.error.message && data.error.message.includes('rate limit'));
         container.innerHTML = '<div class="rb-title">' + sku + '</div>'
-          + '<div class="rb-item" style="color:var(--amber)">API error: ' + data.error.message + '</div>';
+          + '<div class="rb-item" style="color:var(--amber)">' + (isRateLimit ? '⏱ Rate limit — wait 30 seconds then click retry.' : 'API error: ' + data.error.message) + '</div>'
+          + '<div class="rb-item" style="margin-top:4px"><a href="#" onclick="event.preventDefault();fetchMarketPrice(\'' + sku.replace(/'/g,"\\'") + '\',' + ourPrice + ')" style="color:var(--navy);font-size:12px;font-weight:600">↻ Retry</a></div>';
         return;
       }
 
@@ -724,7 +728,8 @@
       let inner = '<div class="rb-title">' + sku + ' — Market prices</div>';
 
       if (!result.found || !result.avg_price) {
-        inner += '<div class="rb-item" style="color:var(--muted)">No market pricing found for this SKU. Try a manufacturer part number or vendor code.</div>';
+        inner += '<div class="rb-item" style="color:var(--muted)">' + (result.notes || 'No market pricing found.') + '</div>';
+        inner += '<div class="rb-item" style="margin-top:4px"><a href="#" onclick="event.preventDefault();fetchMarketPrice(\'' + sku.replace(/'/g,"\\'") + '\',' + ourPrice + ')" style="color:var(--navy);font-size:12px;font-weight:600">↻ Retry search</a></div>';
       } else {
         const ourFmt = ourPrice ? fmt(ourPrice) : null;
         const diff = ourPrice && result.avg_price ? ((ourPrice - result.avg_price) / result.avg_price * 100).toFixed(1) : null;
@@ -749,9 +754,12 @@
       container.innerHTML = inner;
 
     } catch(err) {
-      if (container) container.innerHTML = '<div class="rb-title">' + sku + '</div>'
-        + '<div class="rb-item" style="color:var(--red)">Error: ' + err.message + '</div>'
-        + '<div class="rb-item" style="color:var(--muted)">If this says "Failed to fetch" the API call is being blocked. Check that your key is entered via ⚙ API Key and try again.</div>';
+      if (container) {
+        const isRateLimit = err.message && err.message.includes('rate limit');
+        container.innerHTML = '<div class="rb-title">' + sku + '</div>'
+          + '<div class="rb-item" style="color:var(--amber)">' + (isRateLimit ? 'Rate limit hit — wait 30 seconds and retry.' : 'Error: ' + err.message) + '</div>'
+          + '<div class="rb-item" style="margin-top:4px"><a href="#" onclick="event.preventDefault();fetchMarketPrice(\'' + sku.replace(/'/g,"\\'") + '\',' + ourPrice + ')" style="color:var(--navy);font-size:12px;font-weight:600">↻ Retry</a></div>';
+      }
     }
   }
 
